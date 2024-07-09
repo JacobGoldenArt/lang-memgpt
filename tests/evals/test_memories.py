@@ -1,19 +1,30 @@
 import pytest
 from unittest.mock import MagicMock, patch
 import json
-from typing import List, Dict
+from typing import List
+from langchain_core.messages import AIMessage
 
 from lang_memgpt_local import _constants as constants
+from lang_memgpt_local import _utils as utils
 from lang_memgpt_local.graph import memgraph
 from lang_memgpt_local._schemas import GraphConfig
 
 
 @pytest.fixture(scope="function")
 def mock_db_adapter():
-    with patch("lang_memgpt_local.graph.db_adapter") as mock_adapter:
+    with patch("lang_memgpt_local._utils.db_adapter") as mock_adapter:
         mock_collection = MagicMock()
         mock_adapter.get_collection.return_value = mock_collection
         yield mock_adapter
+
+
+@pytest.fixture(scope="function")
+def mock_chat_model():
+    with patch("lang_memgpt_local.agent.init_chat_model") as mock_init:
+        mock_model = MagicMock()
+        mock_model.invoke.return_value = AIMessage(content="This is a test response")
+        mock_init.return_value = mock_model
+        yield mock_init
 
 
 @pytest.mark.parametrize(
@@ -44,9 +55,10 @@ def mock_db_adapter():
 )
 async def test_patch_memory(
         messages: List[tuple],
-        existing: dict,
         num_mems_expected: int,
-        mock_db_adapter: MagicMock,
+        existing: dict,
+        mock_db_adapter,
+        mock_chat_model,
 ):
     user_id = "4fddb3ef-fcc9-4ef7-91b6-89e4a3efd112"
     thread_id = "e1d0b7f7-0a8b-4c5f-8c4b-8a6c9f6e5c7a"
@@ -71,6 +83,7 @@ async def test_patch_memory(
                 delay=0.1,
                 user_id=user_id,
                 thread_id=thread_id,
+                model="test-model"
             ),
         },
     )
@@ -125,7 +138,8 @@ async def test_patch_memory(
 async def test_insert_memory(
         messages: List[tuple],
         num_events_expected: int,
-        mock_db_adapter: MagicMock,
+        mock_db_adapter,
+        mock_chat_model,
 ):
     user_id = "4fddb3ef-fcc9-4ef7-91b6-89e4a3efd112"
     thread_id = "e1d0b7f7-0a8b-4c5f-8c4b-8a6c9f6e5c7a"
@@ -142,6 +156,7 @@ async def test_insert_memory(
                 delay=0.1,
                 user_id=user_id,
                 thread_id=thread_id,
+                model="test-model"
             ),
         },
     )
@@ -152,4 +167,3 @@ async def test_insert_memory(
     else:
         # If no events are expected, ensure add_memory wasn't called
         mock_db_adapter.add_memory.assert_not_called()
-        assert mock_db_adapter.add_memory.call_count >= num_events_expected

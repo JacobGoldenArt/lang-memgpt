@@ -18,7 +18,11 @@ class ChromaAdapter(VectorDBInterface):
 
     def query_memories(self, vector: List[float], where: Dict[str, Any], n_results: int) -> List[Dict[str, Any]]:
         collection = self.get_or_create_collection("memories")
-        results = collection.query(query_embeddings=[vector], where=where, n_results=n_results)
+        results = collection.query(
+            query_embeddings=[vector],
+            where=where,
+            n_results=n_results
+        )
         return results['metadatas'][0] if results['metadatas'] else []
 
     def get_collection(self, name: str):
