@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, Tuple, List, Dict, Any
-
+import pytest
 import langsmith
 from langchain.chat_models import init_chat_model
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -63,7 +63,6 @@ async def save_recall_memory(memory: str) -> str:
 
     db_adapter.add_memory(event_id, vector, metadata, memory)
     return memory
-
 
 @tool
 def search_memory(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
@@ -191,6 +190,8 @@ async def agent(state: schemas.State, config: RunnableConfig) -> schemas.State:
     )
     return {
         "messages": prediction,
+        "core_memories": state["core_memories"],
+        "recall_memories": state["recall_memories"],
     }
 
 # Function to load memories for the current conversation
@@ -212,6 +213,7 @@ def load_memories(state: schemas.State, config: RunnableConfig) -> schemas.State
     return {
         "core_memories": core_memories,
         "recall_memories": recall_memories,
+        "messages": state["messages"],
     }
 
 async def query_memories(state: schemas.State, config: RunnableConfig) -> schemas.State:
@@ -259,6 +261,8 @@ async def query_memories(state: schemas.State, config: RunnableConfig) -> schema
     
     return {
         "recall_memories": memories,
+        "messages": state["messages"],
+        "core_memories": state["core_memories"],
     }
 
 
