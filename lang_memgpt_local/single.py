@@ -51,7 +51,9 @@ constants = Constants()
 
 # Schemas
 class GraphConfig(TypedDict):
-    model: str | None
+    default_delay: int
+    """The default delay to use for the memory assistant."""
+    model: str
     """The model to use for the memory assistant."""
     thread_id: str
     """The thread ID of the conversation."""
@@ -79,9 +81,8 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Utils
+_DEFAULT_DELAY = GraphConfig.default_delay = 60
 
-
-_DEFAULT_DELAY: int = 60  # seconds
 chroma_persist_directory: str = "./chroma_db"
 model: str = "claude-3-5-sonnet-20240620"
 
@@ -93,15 +94,13 @@ def get_chroma_client() -> chromadb.Client:
 def ensure_configurable(config: RunnableConfig) -> GraphConfig:
     """Merge the user-provided config with default values."""
     configurable = config.get("configurable", {})
-    return {
-        **configurable,
-        **GraphConfig(
-            delay=configurable.get("delay", _DEFAULT_DELAY),
+    return GraphConfig(
+            default_delay=configurable.get("delay", _DEFAULT_DELAY),
             model=configurable.get("model", settings.model),
             thread_id=configurable["thread_id"],
             user_id=configurable["user_id"],
-        ),
-    }
+        )
+
 
 def get_embeddings():
     return FireworksEmbeddings(model="nomic-ai/nomic-embed-text-v1.5")
@@ -296,7 +295,7 @@ prompt = ChatPromptTemplate.from_messages(
 async def agent(state: State, config: RunnableConfig) -> State:
     """Process the current state and generate a response using the LLM."""
     configurable = ensure_configurable(config)
-    llm = init_chat_model(configurable["model"])
+    llm = init_chat_model(configurable.get('model', settings.model))
     bound = prompt | llm.bind_tools(all_tools)
     core_str = (
             "<core_memory>\n" + "\n".join(state["core_memories"]) + "\n</core_memory>"
@@ -304,6 +303,7 @@ async def agent(state: State, config: RunnableConfig) -> State:
     recall_str = (
             "<recall_memory>\n" + "\n".join(state["recall_memories"]) + "\n</recall_memory>"
     )
+    current_time = datetime.now(tz=timezone.utc).isoformat()
     logger.debug(f"Core memories: {core_str}")
     logger.debug(f"Recall memories: {recall_str}")
     prediction = await bound.ainvoke(
@@ -311,11 +311,11 @@ async def agent(state: State, config: RunnableConfig) -> State:
             "messages": state["messages"],
             "core_memories": core_str,
             "recall_memories": recall_str,
-            "current_time": datetime.now(tz=timezone.utc).isoformat(),
+            "current_time": current_time,
         }
     )
     return {
-        "messages": prediction,
+        "messages": prediction
     }
 
 
